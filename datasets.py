@@ -31,6 +31,18 @@ class UnsupervisedDataSet(torch.utils.data.Dataset):
         return self.data[[self.indices[index]]]
 
 
+class TestDataset(torch.utils.data.Dataset):
+    def __init__(self, dataset):
+        super().__init__()
+        self.dataset = dataset
+
+    def __len__(self):
+        return len(self.dataset)
+
+    def __getitem__(self, index):
+        return self.dataset.data[[index]], self.dataset.targets[index].item()
+
+
 class Grayscale2RGB(torch.utils.data.Dataset):
     def __init__(self, dataset):
         super().__init__()
@@ -40,11 +52,10 @@ class Grayscale2RGB(torch.utils.data.Dataset):
         return len(self.dataset)
 
     def __getitem__(self, index):
-        if isinstance(self.dataset, SupervisedDataSet):
+        if isinstance(self.dataset, (SupervisedDataSet, TestDataset)):
             img, label = self.dataset[index]
             img = img.repeat((3, 1, 1))
             return img, label
-
         else:
             img = self.dataset[index]
             img = img.repeat((3, 1, 1))
@@ -75,14 +86,10 @@ def get_dataset(set_name, train, supervised_ratio=0.2, is_grayscale=True, fix_se
         dataset = torchvision.datasets.FashionMNIST(
             root, train=train, transform=transform, download=download)
 
-    if not train:
-        if is_grayscale:
-            return dataset
-        else:
-            return Grayscale2RGB(dataset)
-
-    if not train:
-        return dataset
+    if not train and is_grayscale:
+        return TestDataset(dataset)
+    elif not train:
+        return Grayscale2RGB(TestDataset(dataset))
 
     indices = list(range(len(dataset)))
     random.shuffle(indices)
