@@ -48,7 +48,7 @@ class Grayscale2RGB(torch.utils.data.Dataset):
         else:
             img = self.dataset[index]
             img = img.repeat((3, 1, 1))
-            return img, label
+            return img
 
 
 def get_dataset(set_name, train, supervised_ratio=0.2, is_grayscale=True, fix_seed=True):
