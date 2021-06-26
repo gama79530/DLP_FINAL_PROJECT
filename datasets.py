@@ -32,15 +32,16 @@ class UnsupervisedDataSet(torch.utils.data.Dataset):
 
 
 class TestDataset(torch.utils.data.Dataset):
-    def __init__(self, dataset):
+    def __init__(self, data, targets):
         super().__init__()
-        self.dataset = dataset
+        self.data = data
+        self.targets = targets
 
     def __len__(self):
-        return len(self.dataset)
+        return len(self.data)
 
     def __getitem__(self, index):
-        return self.dataset.data[[index]], self.dataset.targets[index].item()
+        return self.data[[index]], self.targets[index].item()
 
 
 class Grayscale2RGB(torch.utils.data.Dataset):
@@ -86,27 +87,39 @@ def get_dataset(set_name, train, supervised_ratio=0.2, is_grayscale=True, fix_se
         dataset = torchvision.datasets.FashionMNIST(
             root, train=train, transform=transform, download=download)
 
-    if not train and is_grayscale:
-        return TestDataset(dataset)
-    elif not train:
-        return Grayscale2RGB(TestDataset(dataset))
-
-    indices = list(range(len(dataset)))
-    random.shuffle(indices)
-
     data = dataset.data
     targets = dataset.targets
     if set_name.upper() == 'EMNIST-LETTERS':
-        targets = targets-1
-    cut_off = int(len(dataset) * supervised_ratio)
+        targets = targets - 1
 
-    if is_grayscale:
-        return SupervisedDataSet(data, targets, indices[:cut_off]), UnsupervisedDataSet(data, indices[cut_off:])
+    if train:
+        indices = list(range(len(dataset)))
+        random.shuffle(indices)
+
+        cut_off = int(len(dataset) * supervised_ratio)
+
+        sup_set = SupervisedDataSet(data, targets, indices[:cut_off])
+        unsup_set = UnsupervisedDataSet(data, indices[cut_off:])
+        if not is_grayscale:
+            sup_set, unsup_set = Grayscale2RGB(
+                sup_set), Grayscale2RGB(unsup_set)
+        return sup_set, unsup_set
     else:
-        return Grayscale2RGB(SupervisedDataSet(data, targets, indices[:cut_off])), Grayscale2RGB(UnsupervisedDataSet(data, indices[cut_off:]))
+        test_set = TestDataset(data, targets)
+        if not is_grayscale:
+            test_set = Grayscale2RGB(test_set)
+        return test_set
 
 
 if __name__ == '__main__':
-    get_dataset('MNIST', True, 0.3, False)
-    # b = 1
-    print('a', b)
+    sup_set, unsup_set = get_dataset('EMNIST-LETTERS', True, 0.3, True)
+    # sup_set, unsup_set = get_dataset('MNIST', True, 0.3, False)
+    # print(sup_set[0][0].size())
+    # print(sup_set[0][1])
+    # print(unsup_set[0].size())
+    print(sup_set.targets.unique())
+    # print(sup_set.dataset.targets)
+
+    # test_set = get_dataset('MNIST', False, 0.3, True)
+    # test_set = get_dataset('MNIST', False, 0.3, False)
+    # print(test_set[0][0].size())
