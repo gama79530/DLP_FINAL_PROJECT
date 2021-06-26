@@ -76,6 +76,12 @@ def get_dataset(set_name, train, supervised_ratio=0.2, is_grayscale=True, fix_se
             root, train=train, transform=transform, download=download)
 
     if not train:
+        if is_grayscale:
+            return dataset
+        else:
+            return Grayscale2RGB(dataset)
+
+    if not train:
         return dataset
 
     indices = list(range(len(dataset)))
@@ -83,10 +89,17 @@ def get_dataset(set_name, train, supervised_ratio=0.2, is_grayscale=True, fix_se
 
     data = dataset.data
     targets = dataset.targets
-
+    if set_name.upper() == 'EMNIST-LETTERS':
+        targets = targets-1
     cut_off = int(len(dataset) * supervised_ratio)
 
     if is_grayscale:
         return SupervisedDataSet(data, targets, indices[:cut_off]), UnsupervisedDataSet(data, indices[cut_off:])
     else:
         return Grayscale2RGB(SupervisedDataSet(data, targets, indices[:cut_off])), Grayscale2RGB(UnsupervisedDataSet(data, indices[cut_off:]))
+
+
+if __name__ == '__main__':
+    get_dataset('MNIST', True, 0.3, False)
+    # b = 1
+    print('a', b)
