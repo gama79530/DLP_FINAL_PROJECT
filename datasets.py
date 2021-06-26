@@ -46,7 +46,7 @@ class Grayscale2RGB(torch.utils.data.Dataset):
             return img, label
 
         else:
-            img, label = self.dataset[index]
+            img = self.dataset[index]
             img = img.repeat((3, 1, 1))
             return img, label
 
