@@ -49,7 +49,7 @@ class load_data():
 def train(args, get_dataset, model, enc=False):
     FloatTensor = torch.cuda.FloatTensor if args.cuda else torch.FloatTensor
     LongTensor = torch.cuda.LongTensor if args.cuda else torch.LongTensor
-    best_acc = 0
+    best_acc_sum = 0
 
     # num_epochs = 10 if args.debug else args.num_epochs
 
@@ -57,6 +57,7 @@ def train(args, get_dataset, model, enc=False):
     print("\nWorking with {} GPUs".format(n_gpus))
 
     datasets = args.datasets
+    best_acc = {d: 0 for d in datasets}
     # print(datasets)
     get_dataset = load_data(args)
     entropy = (args.alpha + args.beta) > 0
@@ -100,7 +101,7 @@ def train(args, get_dataset, model, enc=False):
 
     loader_train = {dname: DataLoader(dataset_train[dname][0], batch_size=args.batch_size,
                                       shuffle=True) for dname in datasets}
-    loader_val = {dname: DataLoader(dataset_val[dname], batch_size=100,
+    loader_val = {dname: DataLoader(dataset_val[dname], batch_size=args.batch_size,
                                     shuffle=True, drop_last=True) for dname in datasets}
 
     if entropy:
@@ -156,142 +157,142 @@ def train(args, get_dataset, model, enc=False):
         iou = {key: (0, 0) for key in datasets}
 
         # ###### TRAIN begins  #################
-        # for phase in ['train']:
+        for phase in ['train']:
 
-        #     eval_iou = doIou[phase]
-        #     print("-----", phase, "- EPOCH", epoch, "-----")
+            eval_iou = doIou[phase]
+            print("-----", phase, "- EPOCH", epoch, "-----")
 
-        #     scheduler.step(epoch)
-        #     model.train()
+            scheduler.step(epoch)
+            model.train()
 
-        #     for param_group in optimizer.param_groups:
-        #         print("LEARNING RATE: ", param_group['lr'])
-        #         usedLr = float(param_group['lr'])
+            for param_group in optimizer.param_groups:
+                print("LEARNING RATE: ", param_group['lr'])
+                usedLr = float(param_group['lr'])
 
-        #     # Initialize the iterables
+            # Initialize the iterables
 
-        #     labeled_iterator = {dname: iter(
-        #         loader_train[dname]) for dname in datasets}
+            labeled_iterator = {dname: iter(
+                loader_train[dname]) for dname in datasets}
 
-        #     if entropy:
-        #         unlabeled_iterator = {dname: iter(
-        #             loader_unlabeled[dname]) for dname in datasets}
+            if entropy:
+                unlabeled_iterator = {dname: iter(
+                    loader_unlabeled[dname]) for dname in datasets}
 
-        #     if args.alpha:
-        #         alpha = 1
-        #     if args.beta:
-        #         beta = 1
+            if args.alpha:
+                alpha = 1
+            if args.beta:
+                beta = 1
 
-        #     epoch_loss = {d: [] for d in datasets}
-        #     epoch_sup_loss = {d: [] for d in datasets}
-        #     epoch_ent_loss = {d: [] for d in datasets}
+            epoch_loss = {d: [] for d in datasets}
+            epoch_sup_loss = {d: [] for d in datasets}
+            epoch_ent_loss = {d: [] for d in datasets}
 
-        #     time_taken = []
+            time_taken = []
 
-        #     if (eval_iou):
-        #         iou_data = {key: iouEval(NUM_LABELS[key]) for key in datasets}
+            if (eval_iou):
+                iou_data = {key: iouEval(NUM_LABELS[key]) for key in datasets}
 
-        #     for itr in range(n_iters):
+            for itr in range(n_iters):
 
-        #         optimizer.zero_grad()
-        #         loss_sup = {d: 0 for d in datasets}
-        #         loss_ent = {d: [0] for d in datasets}
+                optimizer.zero_grad()
+                loss_sup = {d: 0 for d in datasets}
+                loss_ent = {d: [0] for d in datasets}
 
-        #         for d in datasets:
+                for d in datasets:
 
-        #             images_l, targets_l = next(labeled_iterator[d])
+                    images_l, targets_l = next(labeled_iterator[d])
 
-        #             images_l = images_l.cuda()
-        #             targets_l = targets_l.cuda()
+                    images_l = images_l.cuda()
+                    targets_l = targets_l.cuda()
 
-        #             start_time = time.time()
+                    start_time = time.time()
 
-        #             images_l = Variable(images_l.type(FloatTensor))
-        #             dec_outputs = model(images_l, enc=False,
-        #                                 finetune=args.finetune)
-        #             # print(targets_l.size())
-        #             # print(dec_outputs[d].size())
-        #             # print(dec_outputs[d])
-        #             # print(targets_l)
-        #             loss_s = loss_criterion[d](
-        #                 dec_outputs[d], targets_l)
-        #             loss_s.backward()
-        #             loss_sup[d] = loss_s.item()
+                    images_l = Variable(images_l.type(FloatTensor))
+                    dec_outputs = model(images_l, enc=False,
+                                        finetune=args.finetune)
+                    # print(targets_l.size())
+                    # print(dec_outputs[d].size())
+                    # print(dec_outputs[d])
+                    # print(targets_l)
+                    loss_s = loss_criterion[d](
+                        dec_outputs[d], targets_l)
+                    loss_s.backward()
+                    loss_sup[d] = loss_s.item()
 
-        #             if entropy:
+                    if entropy:
 
-        #                 for _ in range(unlabeled_iters[d]):
-        #                     images_u = next(unlabeled_iterator[d])
-        #                     images_u = images_u.cuda()
+                        for _ in range(unlabeled_iters[d]):
+                            images_u = next(unlabeled_iterator[d])
+                            images_u = images_u.cuda()
 
-        #                     images_u = Variable(images_u.type(FloatTensor))
-        #                     _, en_outputs = model(images_u)
+                            images_u = Variable(images_u.type(FloatTensor))
+                            _, en_outputs = model(images_u)
 
-        #                     loss_e = torch.mean(similarity_module(
-        #                         en_outputs, d, args.alpha, args.beta))  # unsupervised losses
-        #                     loss_e /= unlabeled_iters[d]
-        #                     loss_e.backward()
-        #                     loss_ent[d].append(loss_e.item())
+                            loss_e = torch.mean(similarity_module(
+                                en_outputs, d, args.alpha, args.beta))  # unsupervised losses
+                            loss_e /= unlabeled_iters[d]
+                            loss_e.backward()
+                            loss_ent[d].append(loss_e.item())
 
-        #             epoch_sup_loss[d].append(loss_sup[d])
-        #             epoch_ent_loss[d].extend(loss_ent[d])
-        #             # Already averaged over iters
-        #             epoch_loss[d].append(loss_sup[d] + np.sum(loss_ent[d]))
+                    epoch_sup_loss[d].append(loss_sup[d])
+                    epoch_ent_loss[d].extend(loss_ent[d])
+                    # Already averaged over iters
+                    epoch_loss[d].append(loss_sup[d] + np.sum(loss_ent[d]))
 
-        #         time_taken.append(time.time() - start_time)
-        #         optimizer.step()
+                time_taken.append(time.time() - start_time)
+                optimizer.step()
 
-        #         if args.steps_loss > 0 and (itr % args.steps_loss == 0 or itr == n_iters-1):
-        #             average = {d: np.around(
-        #                 sum(epoch_loss[d]) / len(epoch_loss[d]), 3) for d in datasets}
-        #             print(f'{phase} loss: {average} (epoch: {epoch}, step: {itr})',
-        #                   "// Avg time/img: %.4f s" % (sum(time_taken) / len(time_taken) / args.batch_size))
+                if args.steps_loss > 0 and (itr % args.steps_loss == 0 or itr == n_iters-1):
+                    average = {d: np.around(
+                        sum(epoch_loss[d]) / len(epoch_loss[d]), 3) for d in datasets}
+                    print(f'{phase} loss: {average} (epoch: {epoch}, step: {itr})',
+                          "// Avg time/img: %.4f s" % (sum(time_taken) / len(time_taken) / args.batch_size))
 
-        #         average = {d: np.mean(epoch_loss[d]) for d in datasets}
-        #         average_epoch_loss[phase] = sum(average.values())
+                average = {d: np.mean(epoch_loss[d]) for d in datasets}
+                average_epoch_loss[phase] = sum(average.values())
 
-        #         if entropy:
-        #             average_epoch_sup_loss = {d: np.mean(
-        #                 epoch_sup_loss[d]) for d in datasets}
-        #             average_epoch_ent_loss = {d: np.mean(
-        #                 epoch_ent_loss[d]) for d in datasets}
+                if entropy:
+                    average_epoch_sup_loss = {d: np.mean(
+                        epoch_sup_loss[d]) for d in datasets}
+                    average_epoch_ent_loss = {d: np.mean(
+                        epoch_ent_loss[d]) for d in datasets}
 
-        #             # Write the epoch wise supervised and total unsupervised losses.
-        #             # with open(loss_logpath, "a") as myfile:
-        #             #     if len(datasets) > 1 and (itr % args.steps_loss == 0 or itr == n_iters-1):
-        #             #         myfile.write("%d\t\t%.4f\t\t%.4f\t\t%.4f\t\t%.4f\t\t%.4f\n" % (epoch, average_epoch_sup_loss.get(datasets[0], 0), average_epoch_sup_loss.get(
-        #             #             datasets[1], 0), average_epoch_ent_loss.get(datasets[0], 0), average_epoch_ent_loss.get(datasets[1], 0), average_epoch_loss[phase]))
+                    # Write the epoch wise supervised and total unsupervised losses.
+                    # with open(loss_logpath, "a") as myfile:
+                    #     if len(datasets) > 1 and (itr % args.steps_loss == 0 or itr == n_iters-1):
+                    #         myfile.write("%d\t\t%.4f\t\t%.4f\t\t%.4f\t\t%.4f\t\t%.4f\n" % (epoch, average_epoch_sup_loss.get(datasets[0], 0), average_epoch_sup_loss.get(
+                    #             datasets[1], 0), average_epoch_ent_loss.get(datasets[0], 0), average_epoch_ent_loss.get(datasets[1], 0), average_epoch_loss[phase]))
 
-        #     # Todo: A better way to close the worker threads.
-        #     for d in datasets:
-        #         while True:
-        #             try:
-        #                 _ = next(labeled_iterator[d])
-        #             except StopIteration:
-        #                 break
+            # Todo: A better way to close the worker threads.
+            for d in datasets:
+                while True:
+                    try:
+                        _ = next(labeled_iterator[d])
+                    except StopIteration:
+                        break
 
-        #         if entropy:
-        #             while True:
-        #                 try:
-        #                     _ = next(unlabeled_iterator[d])
-        #                 except StopIteration:
-        #                     break
+                if entropy:
+                    while True:
+                        try:
+                            _ = next(unlabeled_iterator[d])
+                        except StopIteration:
+                            break
 
-        #     iou = {key: (0, 0) for key in datasets}
+            iou = {key: (0, 0) for key in datasets}
 
-        #     if (eval_iou):
-        #         iou = {key: iou_data[key].getIoU() for key in datasets}
+            if (eval_iou):
+                iou = {key: iou_data[key].getIoU() for key in datasets}
 
-        #         iouStr_label = {key: '{:0.2f}'.format(
-        #             iou[key][0]*100) for key in datasets}
-        #         for d in datasets:
-        #             print("EPOCH IoU on {} dataset: {} %".format(
-        #                 d, iouStr_label[d]))
+                iouStr_label = {key: '{:0.2f}'.format(
+                    iou[key][0]*100) for key in datasets}
+                for d in datasets:
+                    print("EPOCH IoU on {} dataset: {} %".format(
+                        d, iouStr_label[d]))
 
         ########## Train ends ###############################
 
         ##### Validation ###############
-        if (epoch == 1) or (epoch % 5 == 0):  # validation after every 5 epoch
+        if (epoch == 1) or (epoch % 1 == 0):  # validation after every 5 epoch
             for phase in ['val']:
 
                 eval_iou = doIou[phase]
@@ -341,19 +342,19 @@ def train(args, get_dataset, model, enc=False):
 
                 for d in datasets:
                     print(f'{d}: pAcc : {np.mean(pAcc[d])*100}%')
+                current_acc = sum([pAcc[key]
+                                  for key in datasets])/len(datasets)
+                if current_acc > best_acc_sum:
+                    torch.save(model.state_dict(), os.path.join(
+                        "./weight", "best.pkl"))
+                    best_acc_sum = current_acc
+                    best_acc = pAcc
+                    print(pAcc)
+            torch.save(model.state_dict(), os.path.join(
+                "./weight", "check.pkl"))
         ############# VALIDATION ends #######################
 
         print("Epoch time {} s".format(time.time() - epoch_start_time))
-
-        # remember best valIoU and save checkpoint
-        if sum([iou[key][0] for key in datasets]) == 0:
-            current_acc = -average_epoch_loss['val']
-        else:
-            # Average of the IoUs to save best model
-            current_acc = sum([iou[key][0] for key in datasets])/len(datasets)
-
-        is_best = current_acc > best_acc
-        best_acc = max(current_acc, best_acc)
 
         # save_checkpoint({
         #     'epoch': epoch + 1,
@@ -445,8 +446,8 @@ def parse_args():
     parser.add_argument('--lr', type=float, default=0.001)
     parser.add_argument('--random-rotate', type=int, default=0)
     parser.add_argument('--random-scale', type=int, default=0)
-    parser.add_argument('--num-epochs', type=int, default=1)
-    parser.add_argument('--batch-size', type=int, default=128)
+    parser.add_argument('--num-epochs', type=int, default=200)
+    parser.add_argument('--batch-size', type=int, default=512)
     # parser.add_argument('--savedir', required=True)
     parser.add_argument('--datasets', nargs='+',
                         default=['MNIST', 'EMNIST-LETTERS'])
@@ -472,7 +473,7 @@ def parse_args():
     parser.add_argument('--port', type=int, default=8097)
     parser.add_argument('--height', type=int, default=512)
     # parser.add_argument('--num-workers', type=int, default=1)
-    parser.add_argument('--steps-loss', type=int, default=50)
+    parser.add_argument('--steps-loss', type=int, default=25)
     # You can use this value to save model every X epochs
     parser.add_argument('--epochs-save', type=int, default=0)
     # recommended: False (takes more time to train otherwise)
